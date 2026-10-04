@@ -1,0 +1,612 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>灰烬三十日</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<style>
+/* 布局：单屏野外控制台。顶部是超大天数和辐射读数，中间是状态与物资，下方是滚动日志，行动按钮放在拇指够得到的位置。 */
+:root{
+  --bg:#d9d7cf; --panel:#e6e4dc; --ink:#1b1f21; --mute:#5a605e; --line:#b4b2a8;
+  --accent:#9c4f12; --on-accent:#fbf7ee; --good:#3b6a45; --warn:#946508; --bad:#a3342a; --scrim:rgba(10,12,12,.58);
+  --f-disp:'Big Shoulders Display','Arial Narrow','PingFang SC','Microsoft YaHei',sans-serif;
+  --f-body:'Noto Sans SC','PingFang SC','Microsoft YaHei',system-ui,sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#14181a; --panel:#1c2123; --ink:#dad7cd; --mute:#8b918c; --line:#323a3c;
+  --accent:#e0a040; --on-accent:#1a1406; --good:#7fb487; --warn:#e0b24f; --bad:#e0705f; --scrim:rgba(0,0,0,.65); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#14181a; --panel:#1c2123; --ink:#dad7cd; --mute:#8b918c; --line:#323a3c;
+  --accent:#e0a040; --on-accent:#1a1406; --good:#7fb487; --warn:#e0b24f; --bad:#e0705f; --scrim:rgba(0,0,0,.65); color-scheme:dark}
+
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit}
+#app{height:100%;max-width:560px;margin:0 auto;padding-inline:16px;padding-block:10px;display:flex;flex-direction:column;gap:10px}
+
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.day .lbl{display:block;font-family:var(--f-mono);font-size:11px;letter-spacing:.2em;color:var(--mute)}
+.day b{font-family:var(--f-disp);font-weight:800;font-size:68px;line-height:.82;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.day .of{font-family:var(--f-disp);font-weight:700;font-size:26px;color:var(--mute);margin-left:4px}
+.mid{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0}
+.pips{display:flex;gap:6px}
+.pip{width:34px;height:22px;border:1px solid var(--line);display:grid;place-items:center;font-size:12px;color:var(--mute)}
+.pip.now{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:700}
+.pip.used{opacity:.4;text-decoration:line-through}
+.wx{font-size:12px;color:var(--mute);text-align:center;min-height:18px}
+.dosi{text-align:right;font-family:var(--f-mono)}
+.dosi small{display:block;font-size:11px;letter-spacing:.16em;color:var(--mute)}
+.dosi b{font-size:22px;font-weight:500;font-variant-numeric:tabular-nums}
+.dosi i{display:block;font-style:normal;font-size:11px;color:var(--mute)}
+.dosi.lv1 b{color:var(--warn)}.dosi.lv2 b{color:var(--bad)}
+
+.vitals{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
+.meter{min-width:0}
+.meter .row{display:flex;justify-content:space-between;font-size:12px;color:var(--mute)}
+.meter .row span:last-child{font-family:var(--f-mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.track{height:7px;background:var(--line);margin-top:3px;overflow:hidden}
+.fill{height:100%;background:var(--good);transition:width .35s}
+.fill.mid{background:var(--warn)}.fill.low{background:var(--bad)}
+.fill.rad{background:var(--warn)}.fill.rad.hot{background:var(--bad)}
+
+.stock{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--line);background:var(--panel)}
+.stock div{padding:5px 0 4px;text-align:center;border-left:1px solid var(--line);min-width:0}
+.stock div:first-child{border-left:0}
+.stock small{display:block;font-size:11px;color:var(--mute);line-height:1.3}
+.stock b{font-family:var(--f-mono);font-weight:500;font-size:16px;font-variant-numeric:tabular-nums}
+.stock .warn b{color:var(--bad)}
+.shelter{font-family:var(--f-mono);font-size:11px;color:var(--mute);display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:-4px}
+
+#log{flex:1;min-height:0;overflow-y:auto;border-block:1px solid var(--line);padding-block:4px;overscroll-behavior:contain}
+.ln{padding:6px 0;border-bottom:1px dashed var(--line);font-size:14.5px;overflow-wrap:anywhere}
+.ln:last-child{border-bottom:0}
+.ln .d{font-family:var(--f-mono);font-size:11px;color:var(--mute);margin-right:8px}
+.ln.good{color:var(--good)}.ln.bad{color:var(--bad)}.ln.sys{color:var(--accent);font-weight:500}.ln.ev{font-style:italic}
+.ln .fx{display:block;font-family:var(--f-mono);font-size:12px;color:var(--mute);font-style:normal;font-weight:400}
+
+#actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn{display:flex;flex-direction:column;gap:1px;text-align:left;padding:9px 12px;background:var(--panel);border:1px solid var(--line);cursor:pointer;min-width:0}
+.btn b{font-size:15px;font-weight:700}
+.btn span{font-family:var(--f-mono);font-size:11px;color:var(--mute);overflow-wrap:anywhere}
+.btn:hover:not(:disabled){border-color:var(--accent)}
+.btn:active:not(:disabled){background:var(--line)}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+.btn.main{border-color:var(--accent)}
+.btn.wide{grid-column:1/-1}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sub{grid-column:1/-1;font-size:12px;color:var(--mute);letter-spacing:.06em}
+
+.overlay{position:fixed;inset:0;background:var(--scrim);display:flex;align-items:flex-end;justify-content:center;z-index:5}
+.sheet{width:100%;max-width:560px;max-height:88%;overflow-y:auto;background:var(--panel);border-top:3px solid var(--accent);padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px}
+.sheet h2{margin:0;font-family:var(--f-disp);font-weight:800;font-size:30px;line-height:1.05;letter-spacing:.01em;text-wrap:balance}
+.sheet p{margin:0;max-width:62ch}
+.sheet .res{font-family:var(--f-mono);font-size:13px;color:var(--mute)}
+.choices{display:flex;flex-direction:column;gap:8px}
+
+.screen{position:fixed;inset:0;z-index:9;background:var(--bg);overflow-y:auto;display:flex;justify-content:center;padding-inline:16px;padding-block:calc(28px + env(safe-area-inset-top,0px)) calc(28px + env(safe-area-inset-bottom,0px))}
+.screen .in{width:100%;max-width:520px;margin:auto 0;display:flex;flex-direction:column;gap:16px}
+.screen .kicker{font-family:var(--f-mono);font-size:12px;letter-spacing:.22em;color:var(--accent)}
+.screen h1{margin:0;font-family:var(--f-disp);font-weight:800;font-size:clamp(64px,22vw,104px);line-height:.88;letter-spacing:-.01em}
+.screen p{margin:0;max-width:60ch}
+.screen ul{margin:0;padding-left:1.1em;color:var(--mute);font-size:14px}
+.screen .tally{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.screen .tally div{border:1px solid var(--line);padding:8px 10px}
+.screen .tally small{display:block;color:var(--mute);font-size:12px}
+.screen .tally b{font-family:var(--f-mono);font-weight:500;font-size:20px}
+.screen .btns{display:flex;flex-direction:column;gap:8px}
+.screen.win .kicker{color:var(--good)}.screen.lose .kicker{color:var(--bad)}
+
+@media (max-width:380px){.day b{font-size:58px}.pip{width:30px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+<div id="app">
+  <header class="top">
+    <div class="day"><span class="lbl">DAY</span><b id="dayN">01</b><span class="of">/30</span></div>
+    <div class="mid"><div class="pips" id="pips"></div><div class="wx" id="wx"></div></div>
+    <div class="dosi" id="dosi"><small>DOSIMETER</small><b id="dv">0.0</b><i>mSv</i></div>
+  </header>
+  <section class="vitals" id="vitals"></section>
+  <section class="stock" id="stock"></section>
+  <div class="shelter" id="shelter"></div>
+  <main id="log" aria-live="polite"></main>
+  <nav id="actions"></nav>
+  <div class="overlay" id="sheet" hidden></div>
+  <div class="screen" id="screen" hidden></div>
+</div>
+<script>
+(function(){
+'use strict';
+var KEY='ash30-save-v1';
+var $=function(s){return document.querySelector(s)};
+var rnd=function(a,b){return Math.floor(Math.random()*(b-a+1))+a};
+var chance=function(p){return Math.random()<p};
+var clamp=function(v,a,b){return Math.max(a,Math.min(b,v))};
+var pick=function(a){return a[Math.floor(Math.random()*a.length)]};
+var MAXDAY=30, RADIO_NEED=4;
+var RES={food:'食物',water:'净水',med:'药品',scrap:'废料',wood:'木柴',ammo:'弹药',part:'零件'};
+var STAT={hp:'生命',sta:'体力',mor:'精神',rad:'辐射'};
+var S=null, mode='main';
+
+function fresh(){
+  return {day:1,ap:3,hp:100,sta:100,mor:70,rad:0,
+    res:{food:5,water:5,med:1,scrap:3,wood:2,ammo:3,part:0},
+    def:0,trap:0,filter:false,radio:false,bc:0,wx:'',cause:'',
+    log:[],over:false,st:{scav:0,ev:0,raid:0}};
+}
+
+/* 应用资源与状态变化，返回一行文字摘要 */
+function eff(r,s,cause){
+  var out=[],k,v,b,real;
+  for(k in (r||{})){
+    v=r[k]; if(!v) continue;
+    b=S.res[k]; S.res[k]=Math.max(0,b+v); real=S.res[k]-b;
+    if(real) out.push(RES[k]+(real>0?'+':'')+real);
+  }
+  for(k in (s||{})){
+    v=s[k]; if(!v) continue;
+    b=S[k]; S[k]=clamp(b+v,0,100); real=S[k]-b;
+    if(real) out.push(STAT[k]+(real>0?'+':'')+real);
+    if(k==='hp'&&v<0&&cause) S.cause=cause;
+  }
+  return out.join('　');
+}
+function R(t,r,s,cause){return {t:t,fx:eff(r,s,cause)};}
+
+var LOC={
+  market:{name:'废弃超市',cost:20,danger:.25,rad:0,note:'食物为主',
+    loot:function(){return {food:rnd(1,3),water:rnd(0,2),scrap:rnd(0,1)}},
+    ok:['翻开坍塌的货架，底层还压着没被动过的罐头。','冷柜早已发臭，但后仓角落里有几箱密封食品。'],
+    bad:['货架轰然倒下，你被砸中了肩膀。','一群红眼睛的老鼠扑出来，你慌乱中摔了一跤。']},
+  hospital:{name:'医院废墟',cost:20,danger:.35,rad:8,note:'药品，有辐射',
+    loot:function(){return {med:chance(.75)?rnd(1,2):0,food:rnd(0,1),scrap:rnd(0,1)}},
+    ok:['药房的铁柜被撬过，但最底下的抽屉还锁着。','护士站的推车里滚出几板没拆封的药。'],
+    bad:['走廊的天花板塌了一块，碎石砸在你背上。','你踩空了楼梯，膝盖重重磕在台阶上。']},
+  garage:{name:'修车厂',cost:20,danger:.3,rad:2,note:'废料，偶有零件',
+    loot:function(){return {scrap:rnd(2,4),part:chance(.25)?1:0}},
+    ok:['工具墙上还挂着扳手和钢丝钳，你拆了能拆的一切。','一辆报废的货车里，线束和电瓶都还完整。'],
+    bad:['千斤顶失手滑落，擦过你的手臂。','锈蚀的卷帘门突然砸下来，你勉强滚出去。']},
+  housing:{name:'居民楼',cost:15,danger:.2,rad:0,note:'什么都有一点',
+    loot:function(){return {food:rnd(0,2),wood:rnd(0,2),scrap:rnd(0,1),water:rnd(0,1)}},
+    ok:['一户人家的厨房柜子里还留着半袋米。','你拆了几件旧家具，顺手摸走了抽屉里的东西。'],
+    bad:['腐朽的地板断了，你一脚踩空。','门后有个陷阱，是别人留下的，已经生锈。']},
+  woods:{name:'城郊林地',cost:20,danger:.25,rad:0,note:'木柴，偶有野味',
+    loot:function(){return {wood:rnd(2,4),food:chance(.4)?rnd(1,2):0}},
+    ok:['枯死的松树还算干燥，你砍了一捆。','灌木丛里有几只被冻僵的鸟。'],
+    bad:['你被倒下的枯枝压了一下。','你在雾里迷了路，摔进一条干沟。']},
+  tower:{name:'广播塔机房',cost:25,danger:.5,rad:10,note:'零件，高危，第6天后开放',minDay:6,
+    loot:function(){return {part:chance(.65)?rnd(1,2):0,scrap:rnd(1,2)}},
+    ok:['机房里的机架还立着，你拆下了几块像样的板子。','你在满地线缆里找到一箱没开封的元件。'],
+    bad:['配电柜突然打火，你被电弧灼伤了手。','高处的钢梯松脱，你抓住栏杆才没摔下去。']}
+};
+
+var CRAFT=[
+  {id:'fort',name:'加固庇护所',cost:{scrap:3,wood:2},desc:'防御 +1，最高 5',can:function(){return S.def<5}},
+  {id:'trap',name:'设置陷阱',cost:{scrap:2,wood:1},desc:'抵挡一次袭击，最多 3 个',can:function(){return S.trap<3}},
+  {id:'filter',name:'滤水器',cost:{scrap:5},desc:'取水不再受辐射，每晚多 2 份净水',can:function(){return !S.filter}},
+  {id:'radio',name:'无线电台',cost:{scrap:3,part:RADIO_NEED},desc:'发出求救信号。撑过 4 个夜晚，救援会来，但袭击更频繁',can:function(){return !S.radio}}
+];
+
+/* 随机事件。每个选项的 run 返回 {t:文字, fx:数值摘要} */
+var EVENTS=[
+ {title:'倒在路边的陌生人',text:'一个穿着破冲锋衣的人靠在墙边，向你举起一只手。「有吃的吗……就一口。」',
+  choices:[
+   {label:'分他一份食物',sub:'食物 -1',can:function(){return S.res.food>=1},run:function(){
+     if(chance(.4)) return R('他从背包里摸出一块电路板塞给你：「谢了，我用不上这个。」',{food:-1,part:1},{mor:8});
+     return R('他含糊地道了谢，蹒跚着走远了。',{food:-1},{mor:8});}},
+   {label:'假装没看见',sub:'精神 -4',run:function(){return R('你加快脚步，身后的喘息声渐渐远去。',null,{mor:-4});}},
+   {label:'趁他虚弱抢走背包',sub:'有风险',run:function(){
+     if(chance(.55)) return R('背包到手了，他没有再动。你不想回头看。',{food:2,scrap:2},{mor:-10});
+     return R('他居然还有力气，一拳打在你肋下，背包也被夺了回去。',null,{hp:-12,mor:-10},'attack');}}
+  ]},
+ {title:'野狗群',text:'低吼声从废墟深处传来。三四条瘦骨嶙峋的野狗围了上来，眼睛在暗处发绿。',
+  choices:[
+   {label:'开枪驱散',sub:'弹药 -1',can:function(){return S.res.ammo>=1},run:function(){return R('枪声在街区里回荡，野狗四散而逃。',{ammo:-1},{mor:2});}},
+   {label:'丢出食物引开它们',sub:'食物 -1',can:function(){return S.res.food>=1},run:function(){return R('它们为那点食物打成一团，你趁机溜走。',{food:-1});}},
+   {label:'爬上断墙硬撑',sub:'体力 -10',run:function(){
+     if(chance(.4)) return R('一条狗咬住了你的小腿，你踢开它才爬上去。',null,{sta:-10,hp:-8},'attack');
+     return R('你爬上断墙，它们守了一阵便散去了。',null,{sta:-10});}}
+  ]},
+ {title:'拾荒商人',text:'一个推着婴儿车的男人拦住你，车里堆满杂物。「换不换？我这儿有好东西。」',
+  choices:[
+   {label:'2 食物换 3 废料',sub:'食物 -2，废料 +3',can:function(){return S.res.food>=2},run:function(){return R('他数了数罐头，点点头，把废料倒进你的袋子。',{food:-2,scrap:3});}},
+   {label:'1 药品换 4 食物',sub:'药品 -1，食物 +4',can:function(){return S.res.med>=1},run:function(){return R('他舔了舔嘴唇，一口气给了你四个罐头。',{med:-1,food:4});}},
+   {label:'3 废料换 2 弹药',sub:'废料 -3，弹药 +2',can:function(){return S.res.scrap>=3},run:function(){return R('他从婴儿车底下摸出一小盒子弹，眼神警惕。',{scrap:-3,ammo:2});}},
+   {label:'不换了',sub:'',run:function(){return R('他耸耸肩，推着车消失在雾里。');}}
+  ]},
+ {title:'塌了一半的地下室',text:'楼梯下面有个被预制板压住的地下室，里面隐约有反光。',
+  choices:[
+   {label:'钻进去看看',sub:'有风险',run:function(){
+     if(chance(.5)) return R('你侧身挤进去，在积水里摸到一个完整的工具箱和一板药。',{scrap:3,med:1});
+     return R('头顶的预制板突然下沉，你被刮伤后退了出来。',null,{hp:-15},'injury');}},
+   {label:'太危险，走吧',sub:'',run:function(){return R('你拍了拍灰，决定留着这条命。');}}
+  ]},
+ {title:'辐射热点',text:'手里的计数器突然噼啪作响。前面路边的废车堆里，似乎有值钱的东西。',
+  choices:[
+   {label:'硬闯过去',sub:'辐射 +12',run:function(){
+     if(chance(.3)) return R('你屏住呼吸翻了一圈，带出废料和一块电路板。',{scrap:2,part:1},{rad:12});
+     return R('你屏住呼吸翻了一圈，只带出了些废料。',{scrap:2},{rad:12});}},
+   {label:'绕路走',sub:'体力 -10',run:function(){return R('你绕了一大圈，计数器的噪音渐渐平息。',null,{sta:-10});}}
+  ]},
+ {title:'褪色的日记',text:'一本被雨水泡皱的笔记本，最后一页写着：「如果有人看到，请替我们活下去。」',
+  choices:[
+   {label:'读下去',sub:'',run:function(){
+     if(chance(.5)) return R('你读到了他们最后一个冬天的故事，眼眶发热，却也更想活下去。',null,{mor:8});
+     return R('你读到一半就合上了。有些东西，不该在今天读。',null,{mor:-6});}},
+   {label:'带走当引火物',sub:'木柴 +1',run:function(){return R('纸张烧得很快。',{wood:1});}}
+  ]},
+ {title:'一罐没有标签的罐头',text:'罐头有点鼓胀，没有标签，但摇起来有水声。',
+  choices:[
+   {label:'现在就打开',sub:'有风险',run:function(){
+     if(chance(.55)) return R('是桃子罐头，甜得让你想哭。',{food:2},{mor:3});
+     return R('里面的东西已经发黑，你还是吐了一地。',null,{hp:-10,mor:-3},'injury');}},
+   {label:'留着以后再说',sub:'食物 +1',run:function(){return R('你把它塞进背包最里层。',{food:1});}}
+  ]},
+ {title:'陌生的脚印',text:'庇护所附近的泥地里有新鲜的脚印，一路绕着你的门口转了半圈。',
+  choices:[
+   {label:'设一个简易陷阱',sub:'木柴 -1，废料 -1',can:function(){return S.res.wood>=1&&S.res.scrap>=1&&S.trap<3},run:function(){S.trap++;return R('你在门口埋下一圈钉板和铁丝。',{wood:-1,scrap:-1});}},
+   {label:'假装没发现',sub:'精神 -3',run:function(){return R('那天晚上你几乎没合眼。',null,{mor:-3});}}
+  ]},
+ {title:'断续的广播',text:'你捡到的半导体收音机突然沙沙作响。一个男声念出一串坐标，随后被噪音吞没。',
+  choices:[
+   {label:'记下坐标',sub:'精神 +8',run:function(){return R('不知道那是求救还是陷阱。但至少，还有别人活着。',null,{mor:8});}},
+   {label:'关掉它',sub:'精神 -1',run:function(){return R('你把电池抠了出来。',null,{mor:-1});}}
+  ]},
+ {title:'云层压得很低',text:'天边传来闷雷。如果现在把空罐子摆出去，也许能接到雨水。',
+  choices:[
+   {label:'摆出所有容器',sub:'净水 +2，辐射 +3',run:function(){return R('雨水带着一点灰味，但够喝了。',{water:2},{rad:3});}},
+   {label:'不冒险',sub:'',run:function(){return R('雨一直没下下来。');}}
+  ]},
+ {title:'一队幸存者',text:'街角出现五个人，手里拎着铁管。领头的女人冲你喊：「一个人？东西留下，人可以走。」',
+  when:function(){return S.day>=5},
+  choices:[
+   {label:'交出物资',sub:'食物 -2，废料 -2',run:function(){return R('她让手下搜了你的口袋，然后挥手放行。',{food:-2,scrap:-2},{mor:-6});}},
+   {label:'亮出枪',sub:'弹药 -2',can:function(){return S.res.ammo>=2},run:function(){
+     if(chance(.6)) return R('你把枪口抬起来，他们互相看了看，慢慢退开了。',{ammo:-2},{mor:4});
+     return R('他们没被吓住，一根铁管砸在你肩上。',{ammo:-2},{hp:-15},'attack');}},
+   {label:'拔腿就跑',sub:'体力 -15',run:function(){
+     if(chance(.5)) return R('你拐进一条窄巷，把他们甩在了身后。',null,{sta:-15});
+     return R('有人追上来踹了你一脚，你才逃脱。',null,{sta:-15,hp:-10},'attack');}}
+  ]}
+];
+
+var END={
+  starve:{type:'lose',title:'最后一罐',text:['你在第{d}天的夜里没有再醒来。','罐头堆早就空了。胃里的灼痛是你最后记得的事。']},
+  thirst:{type:'lose',title:'干涸',text:['第{d}天，水壶里只剩下回声。','你躺在炉火旁，听着窗外远处的风，慢慢睡着了。']},
+  rad:{type:'lose',title:'辐射病',text:['第{d}天，你的头发一把一把脱落。','计数器还在响，但你已经听不见了。']},
+  attack:{type:'lose',title:'废墟里的人',text:['第{d}天，你倒在了别人的拳头和铁管之下。','在这座城市里，活人有时比辐射更危险。']},
+  injury:{type:'lose',title:'没能撑住的伤',text:['第{d}天，伤口开始发烫、发黑。','你没有足够的药，也没有足够的运气。']},
+  mind:{type:'lose',title:'崩溃',text:['第{d}天，你坐在庇护所门口，一动不动。','没有人逼你，是你自己选择不再起身。']},
+  radio:{type:'win',title:'信号回应',text:['第{d}天夜里，无线电里传来清晰的人声。','「收到，请坚守位置。」','直升机的灯光划破灰色的天空时，你才发觉自己哭了。']},
+  survive:{type:'win',title:'坚守者',text:['你在废墟里撑过了整整三十天。','第三十天的清晨，天边出现了车队扬起的尘土。','他们说，你是这一带最后的幸存者之一。']}
+};
+
+/* ---------- 存档 ---------- */
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function readSave(){try{var s=localStorage.getItem(KEY);return s?JSON.parse(s):null}catch(e){return null}}
+function clearSave(){try{localStorage.removeItem(KEY)}catch(e){}}
+
+/* ---------- 日志与渲染 ---------- */
+function say(t,c,fx){
+  S.log.push({d:S.day,t:t,c:c||'',fx:fx||''});
+  if(S.log.length>100) S.log.shift();
+}
+function meter(label,v,k){
+  var c='';
+  if(k==='rad') c='rad'+(v>=60?' hot':'');
+  else c=v<25?'low':(v<50?'mid':'');
+  return '<div class="meter"><div class="row"><span>'+label+'</span><span>'+v+'</span></div><div class="track"><div class="fill '+c+'" style="width:'+v+'%"></div></div></div>';
+}
+function costTxt(c){return Object.keys(c).map(function(k){return RES[k]+' '+c[k]}).join('　')}
+function canPay(c){return Object.keys(c).every(function(k){return S.res[k]>=c[k]})}
+function B(a,name,sub,o){
+  o=o||{};
+  return '<button class="btn'+(o.cls?' '+o.cls:'')+'" data-a="'+a+'"'+(o.dis?' disabled':'')+'><b>'+name+'</b>'+(sub?'<span>'+sub+'</span>':'')+'</button>';
+}
+
+function renderActions(){
+  var h='',k,L,c,i;
+  if(mode==='main'){
+    h+=B('scav','搜刮','占 1 个时段',{cls:'main'});
+    h+=B('water','取水','体力 10'+(S.filter?'':'　有辐射'),{dis:S.sta<10});
+    h+=B('hunt','狩猎','弹药 1　体力 15',{dis:S.res.ammo<1||S.sta<15});
+    h+=B('rest','休息','体力 +25　生命 +5');
+    h+=B('craft','制作','加固、陷阱、滤水、电台');
+    h+=B('med','用药','不占时段　生命 +30　辐射 -15',{dis:S.res.med<1});
+  }else if(mode==='scav'){
+    h+='<div class="sub">去哪里搜刮？</div>';
+    for(k in LOC){
+      L=LOC[k];
+      var locked=L.minDay&&S.day<L.minDay;
+      h+=B('loc:'+k,L.name,(locked?'第 '+L.minDay+' 天后开放':L.note+'　体力 '+L.cost),{dis:locked||S.sta<L.cost});
+    }
+    h+=B('back','返回','',{cls:'wide'});
+  }else if(mode==='craft'){
+    h+='<div class="sub">制作一次占 1 个时段，体力 10</div>';
+    for(i=0;i<CRAFT.length;i++){
+      c=CRAFT[i];
+      h+=B('mk:'+c.id,c.name,c.desc+'　'+costTxt(c.cost),{dis:!c.can()||!canPay(c.cost)||S.sta<10});
+    }
+    h+=B('back','返回','',{cls:'wide'});
+  }
+  $('#actions').innerHTML=h;
+}
+
+function renderAll(){
+  $('#dayN').textContent=(S.day<10?'0':'')+S.day;
+  var p='',i,st;
+  for(i=0;i<3;i++){
+    st=i<3-S.ap?'used':(i===3-S.ap?'now':'');
+    p+='<div class="pip '+st+'">'+['晨','午','昏'][i]+'</div>';
+  }
+  $('#pips').innerHTML=p;
+  $('#wx').textContent=S.wx?('昨夜：'+S.wx):'';
+  var dv=(S.rad*0.8).toFixed(1);
+  $('#dv').textContent=dv;
+  $('#dosi').className='dosi'+(S.rad>=60?' lv2':(S.rad>=30?' lv1':''));
+  $('#vitals').innerHTML=meter('生命',S.hp,'hp')+meter('体力',S.sta,'sta')+meter('精神',S.mor,'mor')+meter('辐射',S.rad,'rad');
+  var keys=['food','water','med','scrap','wood','ammo','part'],s='';
+  keys.forEach(function(k){
+    var w=(k==='food'||k==='water')&&S.res[k]<2;
+    s+='<div'+(w?' class="warn"':'')+'><small>'+RES[k]+'</small><b>'+S.res[k]+'</b></div>';
+  });
+  $('#stock').innerHTML=s;
+  $('#shelter').innerHTML='<span>防御 '+S.def+'/5</span><span>陷阱 '+S.trap+'/3</span><span>滤水器 '+(S.filter?'已装':'无')+'</span><span>电台 '+(S.radio?'广播中 '+S.bc+'/'+RADIO_NEED:'未建')+'</span>';
+  var lg=$('#log'),h='';
+  S.log.forEach(function(e){
+    h+='<div class="ln '+e.c+'"><span class="d">D'+(e.d<10?'0':'')+e.d+'</span>'+e.t+(e.fx?'<span class="fx">'+e.fx+'</span>':'')+'</div>';
+  });
+  lg.innerHTML=h;
+  lg.scrollTop=lg.scrollHeight;
+  renderActions();
+}
+
+/* ---------- 事件弹层 ---------- */
+function showSheet(ev,done){
+  var sh=$('#sheet'),h='';
+  sh.hidden=false;
+  h='<div class="sheet" role="dialog" aria-modal="true"><h2>'+ev.title+'</h2><p>'+ev.text+'</p><div class="choices">';
+  ev.choices.forEach(function(c,i){
+    var ok=!c.can||c.can();
+    h+='<button class="btn" data-i="'+i+'"'+(ok?'':' disabled')+'><b>'+c.label+'</b>'+(c.sub?'<span>'+c.sub+'</span>':'')+'</button>';
+  });
+  h+='</div></div>';
+  sh.innerHTML=h;
+  sh.querySelectorAll('button').forEach(function(b){
+    b.onclick=function(){
+      var r=ev.choices[+b.dataset.i].run();
+      resultSheet(ev.title,r,done);
+    };
+  });
+}
+function resultSheet(title,r,done){
+  var sh=$('#sheet');
+  sh.innerHTML='<div class="sheet" role="dialog" aria-modal="true"><h2>'+title+'</h2><p>'+r.t+'</p>'+(r.fx?'<div class="res">'+r.fx+'</div>':'')+'<button class="btn main" id="okb"><b>继续</b></button></div>';
+  renderAll();
+  $('#okb').onclick=function(){
+    sh.hidden=true;sh.innerHTML='';
+    say('【'+title+'】'+r.t,'ev',r.fx);
+    done();
+  };
+}
+function triggerEvent(done){
+  var pool=EVENTS.filter(function(e){return !e.when||e.when()});
+  S.st.ev++;
+  showSheet(pick(pool),done);
+}
+
+/* ---------- 行动 ---------- */
+function afterAction(){
+  if(checkEnd()) return;
+  if(S.ap<=0){nightfall();return}
+  save();renderAll();
+}
+function finishAction(ep){
+  mode='main';
+  if(checkEnd()){return}
+  if(ep&&chance(ep)){renderAll();triggerEvent(afterAction)}
+  else afterAction();
+}
+function scavenge(key){
+  var L=LOC[key];
+  if(S.over||S.sta<L.cost||(L.minDay&&S.day<L.minDay)) return;
+  S.ap--;S.sta=Math.max(0,S.sta-L.cost);S.st.scav++;
+  var dg=L.danger+(S.mor<25?.1:0)+(S.sta<20?.08:0);
+  var hit=chance(dg),loot=L.loot(),k,res={},st={},empty;
+  if(hit){for(k in loot)loot[k]=Math.floor(loot[k]/2);st.hp=-rnd(8,18)}
+  if(L.rad)st.rad=rnd(Math.max(0,L.rad-2),L.rad+2);
+  empty=Object.keys(loot).every(function(x){return !loot[x]});
+  for(k in loot)res[k]=loot[k];
+  var txt=hit?pick(L.bad):pick(L.ok);
+  if(!hit&&empty)txt='你翻了半天，这里早就被人洗劫一空。';
+  var fx=eff(res,st,'injury');
+  say('【'+L.name+'】'+txt,hit?'bad':(empty?'':'good'),fx);
+  finishAction(.3);
+}
+function hunt(){
+  if(S.res.ammo<1||S.sta<15)return;
+  S.ap--;S.sta-=15;
+  var fx;
+  if(chance(.65)){
+    fx=eff({ammo:-1,food:rnd(3,5)});
+    say('【狩猎】灰蒙蒙的林子里，你打中了一只瘦弱的野兔。','good',fx);
+  }else{
+    fx=eff({ammo:-1});
+    say('【狩猎】你追着一道影子跑了很久，子弹打空了，什么也没带回来。','bad',fx);
+  }
+  finishAction(.15);
+}
+function fetchWater(){
+  if(S.sta<10)return;
+  S.ap--;S.sta-=10;
+  var fx=eff({water:rnd(2,3)},{rad:S.filter?0:rnd(3,6)});
+  say('【取水】'+(S.filter?'河水倒进滤水器，滴出清亮的水。':'河水泛着浑浊的光，你只能硬着头皮灌满水壶。'),'',fx);
+  finishAction(.15);
+}
+function rest(){
+  S.ap--;
+  var fx=eff(null,{sta:25,hp:5,mor:3});
+  say('【休息】你靠着炉火坐了一阵，听着外面的风声，攒回一点力气。','',fx);
+  finishAction(.05);
+}
+function useMed(){
+  if(S.res.med<1)return;
+  var fx=eff({med:-1},{hp:30,rad:-15});
+  say('【用药】你吞下一板药片，恶心感渐渐退去。','good',fx);
+  save();renderAll();
+}
+function craftItem(id){
+  var c=CRAFT.filter(function(x){return x.id===id})[0],k,neg={},t='',cls='good';
+  if(!c||!c.can()||!canPay(c.cost)||S.sta<10)return;
+  S.ap--;
+  for(k in c.cost)neg[k]=-c.cost[k];
+  var fx=eff(neg,{sta:-10});
+  if(id==='fort'){S.def++;t='你用钢板和砖块把门窗又加固了一层。防御 '+S.def+'/5。'}
+  else if(id==='trap'){S.trap++;t='你在门口埋下一圈钉板和铁丝。'}
+  else if(id==='filter'){S.filter=true;t='沙、炭和布层层叠好。滤水器装好了，取水不再有辐射，每晚还能多出两份水。'}
+  else if(id==='radio'){S.radio=true;S.bc=0;cls='sys';t='零件接上旧电池，电台亮起一点红灯。信号发出去了。接下来要撑过 '+RADIO_NEED+' 个夜晚，也要提防被盯上。'}
+  say('【制作】'+t,cls,fx);
+  finishAction(.05);
+}
+
+/* ---------- 夜晚与清晨 ---------- */
+function nightfall(){
+  mode='main';
+  say('夜幕降临。你退回庇护所，点上一小堆火。','sys');
+  var r=Math.random(),fx='',t='',cls='';
+  if(r<.40){S.wx='晴，很冷';t='夜空难得露出几颗星。'}
+  else if(r<.65){S.wx='阴';t='云层压得很低，风里有铁锈味。'}
+  else if(r<.80){
+    S.wx='酸雨';
+    fx=eff({water:rnd(1,2)},{rad:S.def>=3?2:rnd(4,8)});
+    t='酸雨敲打着铁皮屋顶。你接了些雨水，也吸进了灰尘。';
+  }else if(r<.90){
+    S.wx='沙尘';fx=eff({wood:-1},{mor:-3});
+    t='沙尘暴刮了一夜，炉火几次差点熄灭。';
+  }else{
+    S.wx='寒潮';
+    if(S.res.wood>=2){fx=eff({wood:-2});t='寒潮来袭。你烧掉了两捆木柴，才没被冻僵。'}
+    else{fx=eff(null,{hp:-12,mor:-6},'injury');cls='bad';t='寒潮来袭，而你没有足够的木柴。你蜷缩了一整夜。'}
+  }
+  say('【今夜】'+t,cls,fx);
+  if(checkEnd())return;
+  var p=Math.min(.5,.18+S.day*.012)+(S.radio?.18:0);
+  if(chance(p))raid();else dawn();
+}
+function raid(){
+  S.st.raid++;
+  var power=rnd(1,2+Math.floor(S.day/8)),force=S.def+S.trap;
+  var ev={
+    title:'深夜袭击',
+    text:S.radio?'电台的信号引来了不速之客。门外传来金属摩擦声。':'半夜，门外传来金属摩擦声，有人在撬你的门。',
+    choices:[
+      {label:'开枪驱赶',sub:'弹药 -2',can:function(){return S.res.ammo>=2},run:function(){
+        if(force+2>=power)return R('你隔着门缝开了两枪，脚步声仓皇远去。',{ammo:-2},{mor:2});
+        return R('你开了枪，但对方人多，还是冲进来抢走了一些东西。',{ammo:-2,food:-1,scrap:-1},{hp:-10,mor:-4},'attack');}},
+      {label:'靠庇护所硬扛',sub:'防御 '+S.def+(S.trap?'　陷阱 '+S.trap:''),run:function(){
+        if(force>=power){
+          var tr=S.trap>0&&chance(.6);if(tr)S.trap--;
+          return R('撬门的声音持续了很久，最终消失了。'+(tr?'一个陷阱被触发，已经报废。':''),null,{mor:1});
+        }
+        return R('门板被撞开了。你在黑暗里挨了几下，丢了不少东西。',{food:-rnd(1,2),water:-rnd(0,1),scrap:-rnd(0,2)},{hp:-rnd(8,16),mor:-6},'attack');}},
+      {label:'交出物资，换一夜安宁',sub:'食物 -2　废料 -1',run:function(){
+        return R('你从门缝塞出一袋东西。脚步声满意地走远了。',{food:-2,scrap:-1},{mor:-8});}}
+    ]};
+  showSheet(ev,function(){if(checkEnd())return;dawn()});
+}
+function morningLine(){
+  var a=[];
+  if(S.res.food<2)a.push('食物快见底了。');
+  if(S.res.water<2)a.push('水壶几乎是空的。');
+  if(S.hp<40)a.push('伤口隐隐作痛。');
+  if(S.rad>=60)a.push('你的牙龈在渗血。');
+  if(a.length)return a.join('');
+  return pick(['风向变了，灰雾比昨天薄一些。','远处有烟柱升起，你不确定那是谁的。','炉灰还是温的，你伸了个懒腰。','外面很静，静得不太对劲。']);
+}
+function dawn(){
+  var fx,cf,cw,lf,lw;
+  if(S.filter){eff({water:2});say('滤水器滴了一夜，多出两份净水。','good','净水+2')}
+  cf=Math.min(2,S.res.food);cw=Math.min(2,S.res.water);
+  lf=2-cf;lw=2-cw;
+  S.res.food-=cf;S.res.water-=cw;
+  say('你吃了点东西，喝了口水。','','食物-'+cf+'　净水-'+cw);
+  if(lf){fx=eff(null,{hp:-12*lf,mor:-8*lf},'starve');say('肚子空得发疼，你饿着入睡。','bad',fx)}
+  if(lw){fx=eff(null,{hp:-15*lw,mor:-6*lw},'thirst');say('嘴唇干裂，你整夜都在做关于水的梦。','bad',fx)}
+  if(S.rad>=60){fx=eff(null,{hp:-(S.rad>=90?15:6)},'rad');say('辐射让你头晕、掉发。','bad',fx)}
+  if(!lf&&!lw)eff(null,{hp:6,mor:3+(S.res.food>=4?2:0)});
+  eff(null,{sta:Math.round((55+S.def*3)*(S.rad>=60?.5:1))});
+  if(S.rad>0&&S.rad<30)eff(null,{rad:-3});
+  if(S.radio)S.bc++;
+  if(checkEnd())return;
+  if(S.radio&&S.bc>=RADIO_NEED){showEnd('radio');return}
+  S.day++;
+  if(S.day>=MAXDAY){showEnd('survive');return}
+  S.ap=3;mode='main';
+  say('第 '+S.day+' 天清晨。'+morningLine(),'sys');
+  save();renderAll();
+}
+
+/* ---------- 结局与开始界面 ---------- */
+function checkEnd(){
+  if(S.over)return true;
+  var key=null;
+  if(S.hp<=0)key=({starve:'starve',thirst:'thirst',rad:'rad',attack:'attack',injury:'injury'})[S.cause]||'injury';
+  else if(S.mor<=0)key='mind';
+  if(key){showEnd(key);return true}
+  return false;
+}
+function showEnd(key){
+  S.over=true;clearSave();
+  var e=END[key],el=$('#screen');
+  $('#sheet').hidden=true;
+  renderAll();
+  el.className='screen '+e.type;
+  el.hidden=false;
+  el.innerHTML='<div class="in"><div class="kicker">'+(e.type==='win'?'结局　获救':'结局　死亡')+'</div><h1>'+e.title+'</h1>'+
+    e.text.map(function(l){return '<p>'+l.replace('{d}',S.day)+'</p>'}).join('')+
+    '<div class="tally"><div><small>撑到</small><b>第 '+S.day+' 天</b></div><div><small>搜刮</small><b>'+S.st.scav+' 次</b></div><div><small>遭遇</small><b>'+(S.st.ev+S.st.raid)+' 次</b></div></div>'+
+    '<div class="btns"><button class="btn main" id="again"><b>再来一局</b><span>世界不会因你的死而变好，但你可以换个活法</span></button></div></div>';
+  $('#again').onclick=intro;
+}
+function begin(loaded){
+  S=loaded||fresh();mode='main';
+  $('#screen').hidden=true;$('#sheet').hidden=true;
+  if(!loaded)say('核战之后的第 61 天。地下室的墙在渗水，储备不多，但还能撑几天。先出去找点东西吧。','sys');
+  save();renderAll();
+}
+function intro(){
+  var sv=readSave(),el=$('#screen');
+  S=S||fresh();
+  el.className='screen';
+  el.hidden=false;
+  el.innerHTML='<div class="in"><div class="kicker">末日生存　文字模拟</div><h1>灰烬<br>三十日</h1>'+
+    '<p>核战之后的第二个月。城市成了废墟，你守着一间还能挡风的地下室。撑过 30 天等到救援，或者造出电台主动呼救。</p>'+
+    '<ul><li>每天有 3 个时段：晨、午、昏，每个行动占一个时段。</li><li>每晚要吃 2 份食物、喝 2 份水。</li><li>辐射超过 60，每晚都会掉血。</li><li>外面的人，不一定比辐射更友好。</li></ul>'+
+    '<div class="btns"><button class="btn main" id="go"><b>开始求生</b></button>'+
+    (sv&&!sv.over?'<button class="btn" id="cont"><b>继续存档</b><span>第 '+sv.day+' 天　生命 '+sv.hp+'</span></button>':'')+
+    '</div></div>';
+  $('#go').onclick=function(){begin(null)};
+  var c=$('#cont');
+  if(c)c.onclick=function(){begin(sv)};
+}
+
+$('#actions').addEventListener('click',function(e){
+  var b=e.target.closest('button');
+  if(!b||b.disabled||!S||S.over)return;
+  var a=b.dataset.a;
+  if(a==='scav'||a==='craft'){mode=a;renderAll()}
+  else if(a==='back'){mode='main';renderAll()}
+  else if(a==='water')fetchWater();
+  else if(a==='hunt')hunt();
+  else if(a==='rest')rest();
+  else if(a==='med')useMed();
+  else if(a.indexOf('loc:')===0)scavenge(a.slice(4));
+  else if(a.indexOf('mk:')===0)craftItem(a.slice(3));
+});
+
+S=fresh();
+renderAll();
+intro();
+})();
+</script>
+
+</body></html>
